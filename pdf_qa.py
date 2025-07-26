@@ -1,9 +1,9 @@
 from langchain.chains import RetrievalQA
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.vectorstores import Chroma
 from langchain_openai.embeddings import OpenAIEmbeddings
 from langchain_openai import ChatOpenAI
-from langchain.text_splitter import CharacterTextSplitter
 from langchain.chains.question_answering import load_qa_chain
 import os
 import argparse
@@ -47,12 +47,42 @@ pages = loader.load()
 
 # Split and embed
 embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
-vectorstore = Chroma.from_documents(pages, embeddings)
+
+# Define custom text splitter
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=1000,
+    chunk_overlap=200
+)
+
+# Split the PDF into smaller chunks
+split_docs = text_splitter.split_documents(pages)
+
+
+# Check for a previously saved vector db, if exists, load it, otherwise create one
+store_name = "example_store"
+persist_directory = os.path.join(os.getcwd(), store_name)
+
+if os.path.exists(persist_directory):
+    print(f"✅ Found existing vectorstore at {persist_directory}, loading it...")
+    vectordb = Chroma(
+        persist_directory=persist_directory,
+        embedding_function=embeddings
+    )
+else:
+    print("🔄 No existing vectorstore found. Creating a new one...")
+    vectordb = Chroma.from_documents(
+        documents=split_docs,
+        embedding=embeddings,
+        persist_directory=persist_directory
+    )
+    vectordb.persist()
+    print(f"💾 New vectorstore saved to {persist_directory}")
+
 
 # Set up the Q&A chain
 qa_chain = RetrievalQA.from_chain_type(
     llm=ChatOpenAI(openai_api_key=openai_api_key, temperature=0),
-    retriever=vectorstore.as_retriever()
+    retriever=vectordb.as_retriever()
 )
 
 # Ask a question
