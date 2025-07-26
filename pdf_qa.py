@@ -61,4 +61,4 @@ while True:
     if query.lower() in ['exit', 'quit']:
         break
     response = qa_chain.invoke({"query": query})
-    print("A:", response)
+    print("A:", response['result'])
